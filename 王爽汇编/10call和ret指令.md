@@ -133,3 +133,109 @@ debug运行后，代码地址和机器码如下：
 ```
 
 注意入栈和出栈的顺序。
+
+## 10.4 实验
+
+首先补充实验用到的指令：mul乘法指令
+
+8086`mul`乘法指令，支持两种位数相乘：8位和16:
+
+- 8位相乘，默认一个乘数在`al`寄存器中，另外一个在外存或其他寄存器中，乘法结果保存在`ax`中。
+  
+```masm
+mul bl                 ;(ax)=(al)*bl
+mul byte ptr ds:[100]  ;(ax)=((ds)*16+100)*(al) 
+```
+
+- 8位相乘，默认一个乘数在`ax`寄存器中，另外一个在外存或其他寄存器中，乘法结果的高位保存在`dx`中，低位保存在`ax`中。
+
+```masm
+mul bx                 ;(ax)=(ax)*(bx)&0000FFFFH,(dx)=(ax)*(bx)&FFFF0000H
+mul byte ptr ds:[100]  ;(ax)=((ds)*16+100)*(al)&0000FFFFH,(dx)= ((ds)*16+100)*(ax)&FFFF0000H
+```
+
+### 10.10.1 实验：在任意区域显示字符
+
+```masm
+assume cs:codesg,ds:datasg,ss:stacksg
+
+datasg segment
+  db 'welcome to masm!',0
+  dw 0
+datasg ends
+
+stacksg segment
+  db 32 dup(0)
+stacksg ends
+
+codesg segment
+  start:mov dh,10
+        mov dl,30
+        mov cl,2
+        mov ax,datasg
+        mov ds,ax      ;ds=datasg
+        mov ax,stacksg
+        mov ss,ax      ;ss=stacksg
+        mov si,0
+        mov sp,32
+        call show_str
+        mov ax, 4c00h
+        int 21h
+
+;输入ah：显示起始行
+;输入al：显示起始列
+;输入ds：待显示字符段地址，以0结束
+  show_str:push ax
+           push bx
+           push cx
+           push si
+           push es
+           mov ch,0
+           call print_addr
+           mov bx,ds:[18]  ;偏移
+           mov ax,0b800h
+           mov es,ax       ;段地址
+        l1:mov cl,ds:[si]
+           jcxz ok
+           mov es:[bx],cl
+           mov byte ptr es:[bx+1],0cah
+           add bx,2
+           add si,1
+           jmp short l1
+        ok:pop es
+           pop si
+           pop cx
+           pop bx
+           pop ax
+           ret
+;输入ah：行
+;输入al：列
+;输入ds：计算结果保存的段地址
+;输出：ds:[18]
+print_addr:push ax
+           push dx
+           push cx
+           push bx
+           push ds
+
+           mov cx,0
+           mov al,dh
+           mov bl,0a0h
+           mul bl
+           add cx,ax
+           mov al, dl
+           mov bl,02h
+           mul bl
+           add cx,ax
+           mov word ptr ds:[18],cx
+
+           pop ds
+           pop bx
+           pop cx
+           pop dx
+           pop ax
+           ret
+codesg ends
+
+end start
+```
